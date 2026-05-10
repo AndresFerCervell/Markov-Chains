@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de Cadenas de Markov — Convergencia al Estado Estacionario</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e1117;
+    --surface: #161b25;
+    --surface2: #1e2637;
+    --border: #2a3347;
+    --border-light: #3a4a63;
+    --text: #e8edf5;
+    --text-muted: #7a8ba8;
+    --text-dim: #4a5a72;
+    --accent: #4e9eff;
+    --accent-glow: rgba(78,158,255,0.15);
+    --gold: #f0c040;
+    --gold-dim: rgba(240,192,64,0.12);
+    --green: #3dd68c;
+    --red: #ff5e6c;
+    --red-dim: rgba(255,94,108,0.1);
+    --radius: 10px;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Outfit', sans-serif;
+    --serif: 'EB Garamond', serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 0 0 80px 0;
+  }
+
+  /* ── Header ── */
+  header {
+    background: linear-gradient(180deg, #0a0e17 0%, var(--bg) 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 32px 40px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: '';
+    position: absolute;
+    top: -60px; left: 50%;
+    transform: translateX(-50%);
+    width: 600px; height: 200px;
+    background: radial-gradient(ellipse, rgba(78,158,255,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .header-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+  }
+  .header-badge {
+    background: var(--accent-glow);
+    border: 1px solid rgba(78,158,255,0.3);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-top: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .header-text h1 {
+    font-family: var(--serif);
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+  .header-text p {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-top: 6px;
+    font-weight: 300;
+  }
+
+  /* ── Layout ── */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 40px 0;
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  /* ── Panels ── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+  }
+  .panel-icon {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    background: var(--accent-glow);
+    border: 1px solid rgba(78,158,255,0.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .panel-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .panel-body {
+    padding: 20px;
+  }
+
+  /* ── Controls ── */
+  .control-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  label {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  select, input[type="number"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 8px 12px;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+    -moz-appearance: textfield;
+  }
+  select { cursor: pointer; }
+  input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+  select:focus, input[type="number"]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+
+  /* ── Matrix grid ── */
+  .matrix-section { margin-bottom: 20px; }
+  .matrix-label-row {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    padding-left: 2px;
+  }
+  .matrix-grid {
+    display: grid;
+    gap: 4px;
+  }
+  .matrix-row { display: contents; }
+  .matrix-cell {
+    position: relative;
+  }
+  .matrix-cell input {
+    width: 100%;
+    text-align: center;
+    padding: 6px 4px;
+    font-size: 12px;
+    border-radius: 5px;
+  }
+  .matrix-cell input.row-error {
+    border-color: var(--red) !important;
+    background: var(--red-dim);
+  }
+  .matrix-cell input.row-ok {
+    border-color: rgba(61,214,140,0.4);
+  }
+
+  .row-sum-indicators {
+    display: grid;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .row-sum-chip {
+    height: 24px;
+    font-family: var(--mono);
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    border-radius: 4px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    transition: all 0.2s;
+  }
+  .row-sum-chip.ok {
+    border-color: rgba(61,214,140,0.35);
+    background: rgba(61,214,140,0.06);
+    color: var(--green);
+  }
+  .row-sum-chip.err {
+    border-color: rgba(255,94,108,0.35);
+    background: var(--red-dim);
+    color: var(--red);
+  }
+  .row-sum-chip .dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+
+  /* ── Vector inputs ── */
+  .vector-grid {
+    display: grid;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .vector-sum-chip {
+    margin-top: 6px;
+    height: 26px;
+    font-family: var(--mono);
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    border-radius: 5px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    transition: all 0.2s;
+  }
+  .vector-sum-chip.ok { border-color: rgba(61,214,140,0.35); background: rgba(61,214,140,0.06); color: var(--green); }
+  .vector-sum-chip.err { border-color: rgba(255,94,108,0.35); background: var(--red-dim); color: var(--red); }
+
+  /* ── Simulate button ── */
+  .btn-simulate {
+    width: 100%;
+    padding: 12px 24px;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+    box-shadow: 0 2px 16px rgba(78,158,255,0.2);
+    margin-top: 18px;
+  }
+  .btn-simulate:hover {
+    background: #3a8eef;
+    box-shadow: 0 4px 24px rgba(78,158,255,0.35);
+    transform: translateY(-1px);
+  }
+  .btn-simulate:active { transform: translateY(0); }
+  .btn-simulate:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+  /* ── Right column ── */
+  .right-col {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  /* ── Chart ── */
+  .chart-wrap {
+    padding: 24px 20px;
+    position: relative;
+  }
+  .chart-canvas-wrap {
+    position: relative;
+    height: 340px;
+  }
+  .chart-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    font-size: 13px;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .chart-empty .empty-icon { font-size: 36px; opacity: 0.4; }
+  .chart-empty p { font-family: var(--mono); }
+
+  /* ── Stationary vector ── */
+  .stationary-body { padding: 20px; }
+  .state-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .state-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 7px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 13px;
+    transition: all 0.3s;
+  }
+  .state-chip .chip-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .state-chip .chip-label { color: var(--text-muted); font-size: 11px; }
+  .state-chip .chip-val { color: var(--text); font-weight: 500; }
+  .state-chip .chip-pct { color: var(--text-dim); font-size: 11px; }
+
+  .convergence-note {
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: var(--gold-dim);
+    border: 1px solid rgba(240,192,64,0.2);
+    border-radius: 6px;
+    font-size: 12.5px;
+    color: var(--gold);
+    font-family: var(--serif);
+    font-style: italic;
+    line-height: 1.5;
+    display: none;
+  }
+
+  /* ── Iteration info ── */
+  .iter-info {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .info-chip {
+    padding: 6px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .info-chip span { color: var(--accent); font-size: 13px; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Responsive ── */
+  @media (max-width: 860px) {
+    .container { grid-template-columns: 1fr; padding: 20px 16px 0; }
+    header { padding: 24px 20px 18px; }
+    .header-inner { flex-direction: column; gap: 10px; }
+  }
+
+  .preset-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .btn-preset {
+    padding: 5px 11px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-preset:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-glow);
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 16px 0;
+  }
+
+  /* animate new chips in */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .state-chip { animation: fadeUp 0.3s ease forwards; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="header-text">
+      <h1>Cadenas de Markov — Convergencia al Estado Estacionario</h1>
+      <p>Realizado por: Ernesto Aceituno Romero, Román Aranguren España, Miguel Crespo Orti y Andrés Fernández Cervell</p>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <!-- LEFT: Controls -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-icon">⚙</div>
+      <span class="panel-title">Parámetros de la Simulación</span>
+    </div>
+    <div class="panel-body">
+
+      <!-- Presets -->
+      <label>Ejemplos predefinidos</label>
+      <div class="preset-row">
+        <button class="btn-preset" onclick="loadPreset('dna2')">ADN 2×2</button>
+        <button class="btn-preset" onclick="loadPreset('islaCPG')">Isla CPG</button>
+        <button class="btn-preset" onclick="loadPreset('secuenciasRestantes')">Secuencias Restantes</button>
+        
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Dimension -->
+      <div class="control-row" style="margin-bottom:0">
+        <div style="flex:1">
+          <label>Dimensión (n)</label>
+          <select id="dimSelect" onchange="rebuildMatrix()">
+            <option value="2">2 × 2</option>
+            <option value="3" selected>3 × 3</option>
+            <option value="4">4 × 4</option>
+            <option value="5">5 × 5</option>
+            <option value="6">6 × 6</option>
+            <option value="7">7 × 7</option>
+            <option value="8">8 × 8</option>
+            <option value="9">9 × 9</option>
+            <option value="10">10 × 10</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <label>Iteraciones</label>
+          <input type="number" id="iterInput" value="40" min="5" max="500" step="1">
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Transition Matrix -->
+      <div class="matrix-section">
+        <label>Matriz de Transición P</label>
+        <div class="matrix-label-row" id="matrixColLabels"></div>
+        <div id="matrixGrid" class="matrix-grid"></div>
+        <div id="rowSumIndicators" class="row-sum-indicators" style="margin-top:8px"></div>
+      </div>
+
+      <!-- Initial Vector -->
+      <div class="matrix-section" style="margin-top:18px">
+        <label>Vector de Estado Inicial π₀</label>
+        <div id="vectorGrid" class="vector-grid"></div>
+        <div id="vectorSumChip" class="vector-sum-chip">
+          <div class="dot" style="width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0"></div>
+          Suma: —
+        </div>
+      </div>
+
+      <button class="btn-simulate" id="simBtn" onclick="simulate()">
+        <span>▶</span> Simular convergencia
+      </button>
+    </div>
+  </div>
+
+  <!-- RIGHT: Visualization -->
+  <div class="right-col">
+    <!-- Chart panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-icon" style="background:rgba(240,192,64,0.1);border-color:rgba(240,192,64,0.25);">📈</div>
+        <span class="panel-title">Evolución del Vector de Estado</span>
+      </div>
+      <div class="chart-wrap">
+        <div id="iterInfo" class="iter-info" style="display:none">
+          <div class="info-chip">Iteraciones: <span id="iInfo">—</span></div>
+          <div class="info-chip">Dimensión: <span id="dInfo">—</span></div>
+          <div class="info-chip">Convergencia en paso: <span id="cInfo">—</span></div>
+        </div>
+        <div class="chart-canvas-wrap">
+          <div class="chart-empty" id="chartEmpty">
+            <div class="empty-icon">∑</div>
+            <p>Configura los parámetros y pulsa Simular</p>
+          </div>
+          <canvas id="markovChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stationary vector panel -->
+    <div class="panel" id="stationaryPanel">
+      <div class="panel-header">
+        <div class="panel-icon" style="background:rgba(61,214,140,0.1);border-color:rgba(61,214,140,0.25);">π</div>
+        <span class="panel-title">Vector Estacionario Final π*</span>
+      </div>
+      <div class="stationary-body">
+        <div id="stateChips" class="state-chips">
+          <span style="color:var(--text-dim);font-size:13px;font-family:var(--mono)">— esperando simulación —</span>
+        </div>
+        <div id="convergenceNote" class="convergence-note"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Palette ──────────────────────────────────────────────
+const COLORS = [
+  '#4e9eff','#f0c040','#3dd68c','#ff5e6c','#b48eff',
+  '#ff9f47','#00d4d4','#ff7eb3','#a8ff78','#f97316',
+  '#a78bfa','#34d399'
+];
+
+// ── State ─────────────────────────────────────────────────
+let chart = null;
+
+const PRESETS = {
+  dna2: {
+    n: 2,
+    P: [
+      [0.9, 0.1],
+      [0.15, 0.85]
+    ],
+    v: [0.5, 0.5],
+    label: 'Mutación entre 2 bases (A/T)'
+  },
+  islaCPG: {
+    n: 4,
+    P: [
+      [0.180, 0.274, 0.426, 0.120],
+      [0.17075, 0.36775, 0.27375, 0.18775],
+      [0.161, 0.339, 0.375, 0.125],
+      [0.079, 0.355, 0.384, 0.182]
+    ],
+    v: [0, 0.25, 0.75, 0],
+    label: 'Isla CPG (A, C, G, T)'
+  },
+  secuenciasRestantes: {
+    n: 4,
+    P: [
+      [0.300, 0.205, 0.285, 0.210],
+      [0.322, 0.298, 0.078, 0.302],
+      [0.248, 0.246, 0.298, 0.208],
+      [0.177, 0.239, 0.292, 0.292]
+    ],
+    v: [0, 0.33, 0, 0.67],
+    label: 'Secuencias restantes (A, C, G, T)'
+  }
+};
+
+function loadPreset(key) {
+  const p = PRESETS[key];
+  document.getElementById('dimSelect').value = p.n;
+  rebuildMatrix();
+  // Fill matrix
+  for (let i = 0; i < p.n; i++) {
+    for (let j = 0; j < p.n; j++) {
+      const inp = document.getElementById(`m_${i}_${j}`);
+      if (inp) inp.value = p.P[i][j];
+    }
+  }
+  // Fill vector
+  for (let i = 0; i < p.n; i++) {
+    const inp = document.getElementById(`v_${i}`);
+    if (inp) inp.value = p.v[i];
+  }
+  updateAllValidations();
+  simulate();
+}
+
+// ── Build matrix UI ───────────────────────────────────────
+function rebuildMatrix() {
+  const n = parseInt(document.getElementById('dimSelect').value);
+  const cellSize = Math.max(36, Math.floor(296 / n) - 4);
+
+  // Column labels
+  let colLabels = '      ';
+  for (let j = 0; j < n; j++) colLabels += `s${j+1}`.padEnd(Math.max(4, cellSize/8|0), ' ') + ' ';
+  document.getElementById('matrixColLabels').textContent = `→  ${Array.from({length:n},(_,j)=>`s${j+1}`).join('   ')}`;
+
+  const grid = document.getElementById('matrixGrid');
+  grid.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+  grid.innerHTML = '';
+
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const cell = document.createElement('div');
+      cell.className = 'matrix-cell';
+      const inp = document.createElement('input');
+      inp.type = 'number';
+      inp.id = `m_${i}_${j}`;
+      inp.min = 0; inp.max = 1; inp.step = 0.01;
+      inp.value = (i === j ? 0.5 : (0.5 / (n - 1)).toFixed(4));
+      inp.oninput = () => validateRow(i, n);
+      cell.appendChild(inp);
+      grid.appendChild(cell);
+    }
+  }
+
+  // Row sum indicators
+  const rsDiv = document.getElementById('rowSumIndicators');
+  rsDiv.style.gridTemplateColumns = `repeat(${Math.min(n, 5)}, 1fr)`;
+  rsDiv.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const chip = document.createElement('div');
+    chip.className = 'row-sum-chip';
+    chip.id = `rsum_${i}`;
+    chip.innerHTML = `<div class="dot"></div><span>f${i+1}: …</span>`;
+    rsDiv.appendChild(chip);
+  }
+
+  // Initial vector
+  const vGrid = document.getElementById('vectorGrid');
+  vGrid.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+  vGrid.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const inp = document.createElement('input');
+    inp.type = 'number';
+    inp.id = `v_${i}`;
+    inp.min = 0; inp.max = 1; inp.step = 0.01;
+    inp.value = i === 0 ? 1 : 0;
+    inp.oninput = validateVector;
+    vGrid.appendChild(inp);
+  }
+
+  updateAllValidations();
+}
+
+// ── Validation ─────────────────────────────────────────────
+function getRowSum(i, n) {
+  let s = 0;
+  for (let j = 0; j < n; j++) {
+    const v = parseFloat(document.getElementById(`m_${i}_${j}`)?.value) || 0;
+    s += v;
+  }
+  return s;
+}
+
+function validateRow(i, n) {
+  n = n || parseInt(document.getElementById('dimSelect').value);
+  const s = getRowSum(i, n);
+  const ok = Math.abs(s - 1) < 1e-6;
+  const chip = document.getElementById(`rsum_${i}`);
+  if (chip) {
+    chip.className = 'row-sum-chip ' + (ok ? 'ok' : 'err');
+    chip.innerHTML = `<div class="dot"></div><span>f${i+1}: ${s.toFixed(4)}</span>`;
+  }
+  // Update cell borders
+  for (let j = 0; j < n; j++) {
+    const inp = document.getElementById(`m_${i}_${j}`);
+    if (inp) { inp.className = ok ? 'row-ok' : 'row-error'; }
+  }
+  return ok;
+}
+
+function validateVector() {
+  const n = parseInt(document.getElementById('dimSelect').value);
+  let s = 0;
+  for (let i = 0; i < n; i++) s += parseFloat(document.getElementById(`v_${i}`)?.value) || 0;
+  const ok = Math.abs(s - 1) < 1e-6;
+  const chip = document.getElementById('vectorSumChip');
+  chip.className = 'vector-sum-chip ' + (ok ? 'ok' : 'err');
+  chip.innerHTML = `<div style="width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0"></div> Suma: ${s.toFixed(4)} ${ok ? '✓' : '≠ 1'}`;
+  return ok;
+}
+
+function updateAllValidations() {
+  const n = parseInt(document.getElementById('dimSelect').value);
+  for (let i = 0; i < n; i++) validateRow(i, n);
+  validateVector();
+}
+
+// ── Matrix multiply: v·P ───────────────────────────────────
+function vecMatMul(v, P) {
+  const n = v.length;
+  const result = new Array(n).fill(0);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      result[j] += v[i] * P[i][j];
+    }
+  }
+  return result;
+}
+
+function vecDist(a, b) {
+  return Math.max(...a.map((x, i) => Math.abs(x - b[i])));
+}
+
+// ── Simulate ───────────────────────────────────────────────
+function simulate() {
+  const n = parseInt(document.getElementById('dimSelect').value);
+  const iters = Math.min(500, Math.max(5, parseInt(document.getElementById('iterInput').value) || 40));
+
+  // Read P
+  const P = [];
+  let matValid = true;
+  for (let i = 0; i < n; i++) {
+    const row = [];
+    for (let j = 0; j < n; j++) {
+      row.push(parseFloat(document.getElementById(`m_${i}_${j}`)?.value) || 0);
+    }
+    P.push(row);
+    if (!validateRow(i, n)) matValid = false;
+  }
+  if (!validateVector()) matValid = false;
+
+  // Read v0
+  let v = [];
+  for (let i = 0; i < n; i++) v.push(parseFloat(document.getElementById(`v_${i}`)?.value) || 0);
+
+  // Normalize v0 if close
+  const vs = v.reduce((a, b) => a + b, 0);
+  if (vs > 0) v = v.map(x => x / vs);
+
+  // Iterate
+  const history = [v.slice()];
+  let convergenceStep = null;
+  const TOL = 1e-10;
+  for (let t = 0; t < iters; t++) {
+    const next = vecMatMul(v, P);
+    if (convergenceStep === null && vecDist(next, v) < TOL) {
+      convergenceStep = t + 1;
+    }
+    v = next;
+    history.push(v.slice());
+  }
+
+  // Build chart datasets
+  const labels = history.map((_, t) => t);
+  const datasets = [];
+  for (let i = 0; i < n; i++) {
+    datasets.push({
+      label: `π${subscript(i+1)}`,
+      data: history.map(h => parseFloat(h[i].toFixed(8))),
+      borderColor: COLORS[i % COLORS.length],
+      backgroundColor: COLORS[i % COLORS.length] + '22',
+      borderWidth: 2,
+      pointRadius: iters <= 60 ? 3 : 0,
+      pointHoverRadius: 5,
+      tension: 0.35,
+      fill: false,
+    });
+  }
+
+  // Render chart
+  document.getElementById('chartEmpty').style.display = 'none';
+  const ctx = document.getElementById('markovChart').getContext('2d');
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 600 },
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: {
+          title: { display: true, text: 'Iteración (t)', color: '#7a8ba8', font: { family: "'JetBrains Mono'", size: 11 } },
+          grid: { color: '#1e2637' },
+          ticks: { color: '#4a5a72', font: { family: "'JetBrains Mono'", size: 10 }, maxTicksLimit: 12 }
+        },
+        y: {
+          min: 0, max: 1,
+          title: { display: true, text: 'Probabilidad', color: '#7a8ba8', font: { family: "'JetBrains Mono'", size: 11 } },
+          grid: { color: '#1e2637' },
+          ticks: { color: '#4a5a72', font: { family: "'JetBrains Mono'", size: 10 }, stepSize: 0.2 }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: { color: '#7a8ba8', font: { family: "'JetBrains Mono'", size: 11 }, padding: 14, boxWidth: 20 }
+        },
+        tooltip: {
+          backgroundColor: '#1e2637',
+          borderColor: '#2a3347',
+          borderWidth: 1,
+          titleColor: '#7a8ba8',
+          bodyColor: '#e8edf5',
+          bodyFont: { family: "'JetBrains Mono'", size: 12 },
+          padding: 12,
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(6)}`
+          }
+        }
+      }
+    }
+  });
+
+  // Info chips
+  const finalV = history[history.length - 1];
+  document.getElementById('iterInfo').style.display = 'flex';
+  document.getElementById('iInfo').textContent = iters;
+  document.getElementById('dInfo').textContent = `${n}×${n}`;
+  document.getElementById('cInfo').textContent = convergenceStep != null ? `t = ${convergenceStep}` : `> ${iters}`;
+
+  // Stationary chips
+  const chipsDiv = document.getElementById('stateChips');
+  chipsDiv.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const chip = document.createElement('div');
+    chip.className = 'state-chip';
+    chip.style.animationDelay = `${i * 40}ms`;
+    const color = COLORS[i % COLORS.length];
+    chip.innerHTML = `
+      <div class="chip-dot" style="background:${color}"></div>
+      <span class="chip-label">π${subscript(i+1)}</span>
+      <span class="chip-val">${finalV[i].toFixed(6)}</span>
+      <span class="chip-pct">(${(finalV[i]*100).toFixed(2)}%)</span>
+    `;
+    chipsDiv.appendChild(chip);
+  }
+
+  // Convergence note
+  const note = document.getElementById('convergenceNote');
+  if (convergenceStep != null) {
+    note.style.display = 'block';
+    note.textContent = `La cadena convergió al estado estacionario π* en el paso t = ${convergenceStep} (tolerancia ε = 10⁻10). La distribución estacionaria satisface π* P = π*.`;
+  } else {
+    note.style.display = 'block';
+    note.style.background = 'rgba(255,94,108,0.06)';
+    note.style.borderColor = 'rgba(255,94,108,0.2)';
+    note.style.color = '#ff9f9f';
+    note.textContent = `No se detectó convergencia en ${iters} iteraciones (tolerancia ε = 10⁻10). Intenta aumentar el número de iteraciones o verifica la ergodicidad de la cadena.`;
+  }
+}
+
+// ── Helpers ────────────────────────────────────────────────
+function subscript(n) {
+  const subs = '₀₁₂₃₄₅₆₇₈₉';
+  return String(n).split('').map(d => subs[parseInt(d)] || d).join('');
+}
+
+// ── Init ───────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  rebuildMatrix();
+  loadPreset('dna3');
+});
+</script>
+</body>
+</html>
